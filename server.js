@@ -48,7 +48,10 @@ const supabase = createClient(
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 4 * 1024 * 1024 },
+  limits: {
+    fileSize: 4 * 1024 * 1024,
+    files: 10
+  },
   fileFilter: (_req, file, cb) =>
     file.mimetype.startsWith('image/')
       ? cb(null, true)
@@ -193,28 +196,35 @@ app.get('/api/gallery', async (_req, res) => {
   return res.json({ images: data ?? [] });
 });
 
-app.post('/api/upload', adminOnly, upload.single('image'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'Please choose an image.' });
+app.post('/api/upload', adminOnly, upload.array('images', 10), async (req, res) => {
+  const files = req.files || [];
+  if (!files.length) {
+    return res.status(400).json({ error: 'Please choose at least one image.' });
   }
 
-  let result;
+  const uploaded = [];
 
   try {
-    result = await uploadToCloudinary(req.file.buffer);
+    for (const file of files) {
+      const result = await uploadToCloudinary(file.buffer);
+      uploaded.push(result);
+    }
 
-    const { error } = await supabase
-      .from('samirgallery')
-      .insert({ url: result.secure_url });
+    const rows = uploaded.map((result) => ({ url: result.secure_url }));
+    const { error } = await supabase.from('samirgallery').insert(rows);
 
     if (error) {
-      await cloudinary.uploader.destroy(result.public_id, { invalidate: true });
+      await Promise.allSettled(
+        uploaded.map((result) =>
+          cloudinary.uploader.destroy(result.public_id, { invalidate: true })
+        )
+      );
       throw error;
     }
 
     return res.status(201).json({
-      message: 'Image uploaded successfully.',
-      url: result.secure_url
+      message: `${uploaded.length} image${uploaded.length === 1 ? '' : 's'} uploaded successfully.`,
+      urls: uploaded.map((result) => result.secure_url)
     });
   } catch (error) {
     console.error('Upload error:', error?.message || error);
@@ -254,7 +264,6 @@ app.use((error, _req, res, _next) => {
   return res.status(400).json({ error: error?.message || 'Invalid request.' });
 });
 
-// Local development only. Vercel imports this Express app as a serverless function.
 if (!process.env.VERCEL) {
   app.listen(port, () => {
     console.log(`Samir Gallery running on http://localhost:${port}`);
