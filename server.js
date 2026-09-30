@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import multer from 'multer';
 import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -23,9 +22,7 @@ const requiredEnv = [
 ];
 
 const missing = requiredEnv.filter((key) => !process.env[key]);
-if (missing.length) {
-  throw new Error(`Missing environment variables: ${missing.join(', ')}`);
-}
+if (missing.length) throw new Error(`Missing environment variables: ${missing.join(', ')}`);
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -37,28 +34,10 @@ cloudinary.config({
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SECRET_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false
-    }
-  }
+  { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
 );
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 4 * 1024 * 1024,
-    files: 10
-  },
-  fileFilter: (_req, file, cb) =>
-    file.mimetype.startsWith('image/')
-      ? cb(null, true)
-      : cb(new Error('Only image files are allowed.'))
-});
-
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -66,29 +45,16 @@ const COOKIE = 'samir_admin';
 
 function parseCookies(req) {
   return Object.fromEntries(
-    (req.headers.cookie || '')
-      .split(';')
-      .filter(Boolean)
-      .map((value) => {
-        const i = value.indexOf('=');
-        return [
-          value.slice(0, i).trim(),
-          decodeURIComponent(value.slice(i + 1))
-        ];
-      })
+    (req.headers.cookie || '').split(';').filter(Boolean).map((value) => {
+      const i = value.indexOf('=');
+      return [value.slice(0, i).trim(), decodeURIComponent(value.slice(i + 1))];
+    })
   );
 }
 
 function token() {
-  const payload = Buffer.from(
-    JSON.stringify({ exp: Date.now() + 12 * 60 * 60 * 1000 })
-  ).toString('base64url');
-
-  const sig = crypto
-    .createHmac('sha256', process.env.SESSION_SECRET)
-    .update(payload)
-    .digest('base64url');
-
+  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 12 * 60 * 60 * 1000 })).toString('base64url');
+  const sig = crypto.createHmac('sha256', process.env.SESSION_SECRET).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
 
@@ -96,18 +62,10 @@ function validToken(value) {
   try {
     const [payload, sig] = value.split('.');
     if (!payload || !sig) return false;
-
-    const expected = crypto
-      .createHmac('sha256', process.env.SESSION_SECRET)
-      .update(payload)
-      .digest('base64url');
-
-    const sigBuffer = Buffer.from(sig);
-    const expectedBuffer = Buffer.from(expected);
-
-    if (sigBuffer.length !== expectedBuffer.length) return false;
-    if (!crypto.timingSafeEqual(sigBuffer, expectedBuffer)) return false;
-
+    const expected = crypto.createHmac('sha256', process.env.SESSION_SECRET).update(payload).digest('base64url');
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
     return JSON.parse(Buffer.from(payload, 'base64url')).exp > Date.now();
   } catch {
     return false;
@@ -116,9 +74,7 @@ function validToken(value) {
 
 function adminOnly(req, res, next) {
   if (validToken(parseCookies(req)[COOKIE] || '')) return next();
-  if (req.path.startsWith('/api/')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
   return res.redirect('/admin/login');
 }
 
@@ -128,11 +84,8 @@ app.get('/admin/login', (_req, res) =>
 
 app.post('/admin/login', (req, res) => {
   if (req.body.password !== process.env.ADMIN_PASSWORD) {
-    return res
-      .status(401)
-      .send('Invalid password. <a href="/admin/login">Try again</a>');
+    return res.status(401).send('Invalid password. <a href="/admin/login">Try again</a>');
   }
-
   res.setHeader(
     'Set-Cookie',
     `${COOKIE}=${token()}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${
@@ -156,22 +109,6 @@ app.post('/admin/logout', (_req, res) => {
   return res.redirect('/admin/login');
 });
 
-function uploadToCloudinary(buffer) {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        resource_type: 'image',
-        asset_folder: 'samirgallery',
-        use_filename: true,
-        unique_filename: true,
-        overwrite: false
-      },
-      (error, result) => (error ? reject(error) : resolve(result))
-    );
-    stream.end(buffer);
-  });
-}
-
 function publicIdFromUrl(url) {
   try {
     const parsed = new URL(url);
@@ -185,64 +122,79 @@ function publicIdFromUrl(url) {
   }
 }
 
+function isOurCloudinaryUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' &&
+      parsed.hostname === 'res.cloudinary.com' &&
+      parsed.pathname.startsWith(`/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/`);
+  } catch {
+    return false;
+  }
+}
+
 app.get('/api/gallery', async (_req, res) => {
   const { data, error } = await supabase.from('samirgallery').select('url');
-
   if (error) {
     console.error('Supabase read error:', error.message);
     return res.status(500).json({ error: 'Could not load gallery.' });
   }
-
   return res.json({ images: data ?? [] });
 });
 
-app.post('/api/upload', adminOnly, upload.array('images', 10), async (req, res) => {
-  const files = req.files || [];
-  if (!files.length) {
-    return res.status(400).json({ error: 'Please choose at least one image.' });
+// Return a short-lived signature. The browser uploads the image directly to Cloudinary,
+// so large image bytes never pass through Vercel.
+app.get('/api/upload-signature', adminOnly, (_req, res) => {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const assetFolder = 'samirgallery';
+  const paramsToSign = { timestamp, asset_folder: assetFolder };
+  const signature = cloudinary.utils.api_sign_request(
+    paramsToSign,
+    process.env.CLOUDINARY_API_SECRET
+  );
+
+  return res.json({
+    timestamp,
+    signature,
+    assetFolder,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY
+  });
+});
+
+// Save only the small Cloudinary metadata/URLs to Supabase.
+app.post('/api/gallery', adminOnly, async (req, res) => {
+  const assets = Array.isArray(req.body?.assets) ? req.body.assets : [];
+  if (!assets.length) return res.status(400).json({ error: 'No uploaded assets received.' });
+
+  const validAssets = assets.filter(
+    (asset) => asset && typeof asset.url === 'string' && isOurCloudinaryUrl(asset.url)
+  );
+  if (validAssets.length !== assets.length) {
+    return res.status(400).json({ error: 'Invalid Cloudinary asset data.' });
   }
 
-  const uploaded = [];
+  const { error } = await supabase
+    .from('samirgallery')
+    .insert(validAssets.map((asset) => ({ url: asset.url })));
 
-  try {
-    for (const file of files) {
-      const result = await uploadToCloudinary(file.buffer);
-      uploaded.push(result);
-    }
-
-    const rows = uploaded.map((result) => ({ url: result.secure_url }));
-    const { error } = await supabase.from('samirgallery').insert(rows);
-
-    if (error) {
-      await Promise.allSettled(
-        uploaded.map((result) =>
-          cloudinary.uploader.destroy(result.public_id, { invalidate: true })
-        )
-      );
-      throw error;
-    }
-
-    return res.status(201).json({
-      message: `${uploaded.length} image${uploaded.length === 1 ? '' : 's'} uploaded successfully.`,
-      urls: uploaded.map((result) => result.secure_url)
-    });
-  } catch (error) {
-    console.error('Upload error:', error?.message || error);
-    return res.status(500).json({
-      error: error?.message || 'Upload failed.'
-    });
+  if (error) {
+    const ids = validAssets.map((asset) => asset.publicId).filter(Boolean);
+    await Promise.allSettled(ids.map((id) => cloudinary.uploader.destroy(id, { invalidate: true })));
+    console.error('Supabase insert error:', error.message);
+    return res.status(500).json({ error: 'Images uploaded, but saving the gallery failed.' });
   }
+
+  return res.status(201).json({
+    message: `${validAssets.length} image${validAssets.length === 1 ? '' : 's'} added successfully.`
+  });
 });
 
 app.delete('/api/gallery', adminOnly, async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'URL required.' });
 
-  const { error } = await supabase
-    .from('samirgallery')
-    .delete()
-    .eq('url', url);
-
+  const { error } = await supabase.from('samirgallery').delete().eq('url', url);
   if (error) return res.status(500).json({ error: error.message });
 
   const publicId = publicIdFromUrl(url);
@@ -257,17 +209,12 @@ app.delete('/api/gallery', adminOnly, async (req, res) => {
   return res.json({ message: 'Deleted.' });
 });
 
-app.use((error, _req, res, _next) => {
-  if (error instanceof multer.MulterError) {
-    return res.status(400).json({ error: error.message });
-  }
-  return res.status(400).json({ error: error?.message || 'Invalid request.' });
-});
+app.use((error, _req, res, _next) =>
+  res.status(400).json({ error: error?.message || 'Invalid request.' })
+);
 
 if (!process.env.VERCEL) {
-  app.listen(port, () => {
-    console.log(`Samir Gallery running on http://localhost:${port}`);
-  });
+  app.listen(port, () => console.log(`Samir Gallery running on http://localhost:${port}`));
 }
 
 export default app;
