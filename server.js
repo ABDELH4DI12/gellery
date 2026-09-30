@@ -133,8 +133,25 @@ function isOurCloudinaryUrl(url) {
   }
 }
 
+async function normalizePositions() {
+  const { data, error } = await supabase
+    .from('samirgallery')
+    .select('url, position')
+    .order('position', { ascending: true });
+  if (error) throw error;
+  const updates = (data || []).map((item, index) =>
+    supabase.from('samirgallery').update({ position: index }).eq('url', item.url)
+  );
+  const results = await Promise.all(updates);
+  const failed = results.find((result) => result.error);
+  if (failed) throw failed.error;
+}
+
 app.get('/api/gallery', async (_req, res) => {
-  const { data, error } = await supabase.from('samirgallery').select('url');
+  const { data, error } = await supabase
+    .from('samirgallery')
+    .select('url, position')
+    .order('position', { ascending: true });
   if (error) {
     console.error('Supabase read error:', error.message);
     return res.status(500).json({ error: 'Could not load gallery.' });
@@ -142,8 +159,6 @@ app.get('/api/gallery', async (_req, res) => {
   return res.json({ images: data ?? [] });
 });
 
-// Return a short-lived signature. The browser uploads the image directly to Cloudinary,
-// so large image bytes never pass through Vercel.
 app.get('/api/upload-signature', adminOnly, (_req, res) => {
   const timestamp = Math.floor(Date.now() / 1000);
   const assetFolder = 'samirgallery';
@@ -162,7 +177,6 @@ app.get('/api/upload-signature', adminOnly, (_req, res) => {
   });
 });
 
-// Save only the small Cloudinary metadata/URLs to Supabase.
 app.post('/api/gallery', adminOnly, async (req, res) => {
   const assets = Array.isArray(req.body?.assets) ? req.body.assets : [];
   if (!assets.length) return res.status(400).json({ error: 'No uploaded assets received.' });
@@ -174,9 +188,23 @@ app.post('/api/gallery', adminOnly, async (req, res) => {
     return res.status(400).json({ error: 'Invalid Cloudinary asset data.' });
   }
 
-  const { error } = await supabase
+  const { data: lastRows, error: lastError } = await supabase
     .from('samirgallery')
-    .insert(validAssets.map((asset) => ({ url: asset.url })));
+    .select('position')
+    .order('position', { ascending: false })
+    .limit(1);
+
+  if (lastError) {
+    return res.status(500).json({ error: 'Could not determine gallery sequence.' });
+  }
+
+  const startPosition = (lastRows?.[0]?.position ?? -1) + 1;
+  const rows = validAssets.map((asset, index) => ({
+    url: asset.url,
+    position: startPosition + index
+  }));
+
+  const { error } = await supabase.from('samirgallery').insert(rows);
 
   if (error) {
     const ids = validAssets.map((asset) => asset.publicId).filter(Boolean);
@@ -190,12 +218,49 @@ app.post('/api/gallery', adminOnly, async (req, res) => {
   });
 });
 
+app.post('/api/gallery/reorder', adminOnly, async (req, res) => {
+  const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+  if (!urls.length || urls.some((url) => typeof url !== 'string')) {
+    return res.status(400).json({ error: 'Invalid gallery sequence.' });
+  }
+  if (new Set(urls).size !== urls.length) {
+    return res.status(400).json({ error: 'Duplicate items in gallery sequence.' });
+  }
+
+  const { data: current, error: currentError } = await supabase
+    .from('samirgallery')
+    .select('url');
+  if (currentError) return res.status(500).json({ error: currentError.message });
+
+  const currentUrls = (current || []).map((item) => item.url).sort();
+  const requestedUrls = [...urls].sort();
+  if (currentUrls.length !== requestedUrls.length || currentUrls.some((url, i) => url !== requestedUrls[i])) {
+    return res.status(409).json({ error: 'Gallery changed. Refresh the admin page and try again.' });
+  }
+
+  const results = await Promise.all(
+    urls.map((url, index) =>
+      supabase.from('samirgallery').update({ position: index }).eq('url', url)
+    )
+  );
+  const failed = results.find((result) => result.error);
+  if (failed) return res.status(500).json({ error: failed.error.message });
+
+  return res.json({ message: 'Sequence saved.' });
+});
+
 app.delete('/api/gallery', adminOnly, async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'URL required.' });
 
   const { error } = await supabase.from('samirgallery').delete().eq('url', url);
   if (error) return res.status(500).json({ error: error.message });
+
+  try {
+    await normalizePositions();
+  } catch (error) {
+    console.warn('Position normalization warning:', error.message);
+  }
 
   const publicId = publicIdFromUrl(url);
   if (publicId) {
