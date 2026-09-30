@@ -1,84 +1,52 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gallery Admin</title><style>*{box-sizing:border-box}body{margin:0;background:#0b0b0b;color:#eee;font:14px system-ui}.wrap{width:min(1000px,92vw);margin:40px auto}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}h1{font-size:28px;margin:0}button{cursor:pointer}.logout{background:none;color:#aaa;border:1px solid #333;padding:9px 12px;border-radius:8px}.upload{border:1px dashed #3b3b3b;border-radius:16px;padding:22px;background:#111;margin-bottom:28px}.upload form{display:flex;gap:10px;flex-wrap:wrap}input[type=file]{flex:1;min-width:220px;padding:12px;background:#090909;border:1px solid #292929;border-radius:9px;color:#aaa}.primary{border:0;border-radius:9px;padding:12px 20px;background:#eaff65;font-weight:700}.primary:disabled{opacity:.55;cursor:not-allowed}.status{margin:12px 0 0;color:#999}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}.card{background:#111;border:1px solid #222;border-radius:14px;overflow:hidden}.card img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#090909;display:block}.card div{padding:10px}.delete{width:100%;border:1px solid #3a2424;background:#1a1010;color:#ff8c8c;border-radius:8px;padding:9px}a{color:#eaff65}</style></head><body><div class="wrap"><header><div><h1>Gallery Admin</h1><small><a href="/" target="_blank">View live showcase ↗</a></small></div><form method="post" action="/admin/logout"><button class="logout">Log out</button></form></header><section class="upload"><form id="upload"><input id="file" type="file" accept="image/*" multiple required><button class="primary" id="uploadBtn">Add work</button></form><p class="status" id="status">Select as many images as you need. They upload directly to Cloudinary.</p></section><section class="grid" id="grid"></section></div><script>
-const grid=document.querySelector('#grid'),status=document.querySelector('#status'),fileInput=document.querySelector('#file'),uploadBtn=document.querySelector('#uploadBtn');
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gallery Admin</title><style>*{box-sizing:border-box}body{margin:0;background:#0b0b0b;color:#eee;font:14px system-ui}.wrap{width:min(1100px,94vw);margin:36px auto 60px}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;gap:20px}h1{font-size:28px;margin:0}button{cursor:pointer}.logout{background:none;color:#aaa;border:1px solid #333;padding:9px 12px;border-radius:8px}.upload,.manager{border:1px solid #272727;border-radius:16px;padding:22px;background:#111;margin-bottom:24px}.upload{border-style:dashed;border-color:#3b3b3b}.upload form{display:flex;gap:10px;flex-wrap:wrap}input[type=file]{flex:1;min-width:220px;padding:12px;background:#090909;border:1px solid #292929;border-radius:9px;color:#aaa}.primary{border:0;border-radius:9px;padding:12px 20px;background:#eaff65;color:#101010;font-weight:800}.primary:disabled{opacity:.55;cursor:not-allowed}.secondary{border:1px solid #3a3a3a;border-radius:9px;padding:10px 14px;background:#171717;color:#eee;font-weight:700}.status{margin:12px 0 0;color:#999}.manager-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:14px}.manager-head h2{margin:0;font-size:18px}.manager-head p{margin:4px 0 0;color:#777;font-size:12px}.table-wrap{overflow:auto;border:1px solid #242424;border-radius:12px}.gallery-table{width:100%;border-collapse:collapse;min-width:760px;background:#0d0d0d}.gallery-table th,.gallery-table td{padding:10px 12px;border-bottom:1px solid #222;text-align:left;vertical-align:middle}.gallery-table th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#777;background:#111;position:sticky;top:0;z-index:1}.gallery-table tr:last-child td{border-bottom:0}.gallery-table tbody tr{transition:.15s;background:#0d0d0d}.gallery-table tbody tr:hover{background:#121212}.gallery-table tbody tr.dragging{opacity:.4}.gallery-table tbody tr.drop-target{outline:1px solid #eaff65;outline-offset:-1px}.handle{font-size:20px;cursor:grab;color:#888;user-select:none;touch-action:none}.handle:active{cursor:grabbing}.seq{font-variant-numeric:tabular-nums;color:#bbb;width:70px}.thumb{width:96px;height:64px;border-radius:8px;object-fit:contain;background:#070707;border:1px solid #222;display:block}.url{max-width:430px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#777}.actions{display:flex;gap:6px;align-items:center}.move,.delete{border-radius:8px;padding:8px 10px;background:#161616}.move{border:1px solid #333;color:#ddd}.delete{border:1px solid #3a2424;background:#1a1010;color:#ff8c8c}.save-state{font-size:12px;color:#888;margin-right:8px}a{color:#eaff65}.empty{padding:28px;text-align:center;color:#666}@media(max-width:700px){.wrap{width:94vw;margin-top:22px}.upload,.manager{padding:16px}header{align-items:flex-start}h1{font-size:24px}.manager-head{align-items:flex-start;flex-direction:column}.manager-head>div:last-child{display:flex;width:100%;justify-content:space-between;align-items:center}.primary{width:auto}}</style></head><body><div class="wrap"><header><div><h1>Gallery Admin</h1><small><a href="/" target="_blank">View live showcase ↗</a></small></div><form method="post" action="/admin/logout"><button class="logout">Log out</button></form></header><section class="upload"><form id="upload"><input id="file" type="file" accept="image/*" multiple required><button class="primary" id="uploadBtn">Add work</button></form><p class="status" id="status">Select as many images as you need. They upload directly to Cloudinary.</p></section><section class="manager"><div class="manager-head"><div><h2>Showcase sequence</h2><p>Drag rows to reorder. On phones, use ↑ and ↓. Then save the sequence.</p></div><div><span class="save-state" id="saveState">Saved</span><button class="primary" id="saveOrder" disabled>Save sequence</button></div></div><div class="table-wrap"><table class="gallery-table"><thead><tr><th></th><th>#</th><th>Preview</th><th>Image</th><th>Actions</th></tr></thead><tbody id="galleryBody"></tbody></table><div class="empty" id="empty" hidden>No images yet.</div></div></section></div><script>
+const body=document.querySelector('#galleryBody'),empty=document.querySelector('#empty'),status=document.querySelector('#status'),fileInput=document.querySelector('#file'),uploadBtn=document.querySelector('#uploadBtn'),saveBtn=document.querySelector('#saveOrder'),saveState=document.querySelector('#saveState');
+let items=[],dragIndex=null,dirty=false;
+
+function setDirty(value=true){dirty=value;saveBtn.disabled=!value;saveState.textContent=value?'Unsaved changes':'Saved';saveState.style.color=value?'#eaff65':'#888'}
+
+function moveItem(from,to){if(from===to||from<0||to<0||from>=items.length||to>=items.length)return;const [item]=items.splice(from,1);items.splice(to,0,item);setDirty(true);renderRows()}
+
+function renderRows(){
+  body.innerHTML='';empty.hidden=items.length>0;
+  items.forEach((item,index)=>{
+    const tr=document.createElement('tr');tr.draggable=true;tr.dataset.index=index;
+    const handle=document.createElement('td');handle.className='handle';handle.textContent='☰';handle.title='Drag to reorder';
+    const seq=document.createElement('td');seq.className='seq';seq.textContent=String(index+1).padStart(2,'0');
+    const preview=document.createElement('td');const img=document.createElement('img');img.className='thumb';img.src=item.url;img.loading='lazy';preview.appendChild(img);
+    const urlCell=document.createElement('td');urlCell.className='url';urlCell.textContent=item.url;urlCell.title=item.url;
+    const actions=document.createElement('td');actions.className='actions';
+    const up=document.createElement('button');up.className='move';up.textContent='↑';up.title='Move up';up.disabled=index===0;up.onclick=()=>moveItem(index,index-1);
+    const down=document.createElement('button');down.className='move';down.textContent='↓';down.title='Move down';down.disabled=index===items.length-1;down.onclick=()=>moveItem(index,index+1);
+    const del=document.createElement('button');del.className='delete';del.textContent='Delete';del.onclick=async()=>{if(!confirm('Delete this work?'))return;del.disabled=true;const r=await fetch('/api/gallery',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:item.url})});if(r.ok){await load();}else{del.disabled=false;alert('Delete failed')}};
+    actions.append(up,down,del);tr.append(handle,seq,preview,urlCell,actions);
+    tr.addEventListener('dragstart',()=>{dragIndex=index;tr.classList.add('dragging')});
+    tr.addEventListener('dragend',()=>{dragIndex=null;tr.classList.remove('dragging');document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'))});
+    tr.addEventListener('dragover',e=>{e.preventDefault();tr.classList.add('drop-target')});
+    tr.addEventListener('dragleave',()=>tr.classList.remove('drop-target'));
+    tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('drop-target');if(dragIndex!==null)moveItem(dragIndex,index)});
+    body.appendChild(tr);
+  });
+}
 
 async function load(){
-  const r=await fetch('/api/gallery');
-  const j=await r.json();
-  grid.innerHTML='';
-  (j.images||[]).forEach(({url})=>{
-    const c=document.createElement('article');c.className='card';
-    const img=document.createElement('img');img.src=url;img.loading='lazy';
-    const d=document.createElement('div');
-    const b=document.createElement('button');b.className='delete';b.textContent='Delete';
-    b.onclick=async()=>{
-      if(!confirm('Delete this work?'))return;
-      b.disabled=true;
-      const r=await fetch('/api/gallery',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
-      if(r.ok)load();else{b.disabled=false;alert('Delete failed')}
-    };
-    d.appendChild(b);c.append(img,d);grid.appendChild(c)
-  })
+  const r=await fetch('/api/gallery');const j=await r.json();
+  if(!r.ok){status.textContent=j.error||'Could not load gallery.';return}
+  items=(j.images||[]).map(x=>({url:x.url,position:x.position}));setDirty(false);renderRows();
 }
 
-fileInput.addEventListener('change',()=>{
-  const count=fileInput.files.length;
-  status.textContent=count?`${count} image${count===1?'':'s'} selected.`:'Select as many images as you need.'
-});
-
-async function getUploadConfig(){
-  const r=await fetch('/api/upload-signature');
-  const j=await r.json();
-  if(!r.ok)throw new Error(j.error||'Could not prepare upload.');
-  return j;
-}
-
-async function uploadOne(file,cfg){
-  const fd=new FormData();
-  fd.append('file',file);
-  fd.append('api_key',cfg.apiKey);
-  fd.append('timestamp',String(cfg.timestamp));
-  fd.append('signature',cfg.signature);
-  fd.append('asset_folder',cfg.assetFolder);
-  const r=await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cfg.cloudName)}/image/upload`,{method:'POST',body:fd});
-  const j=await r.json();
-  if(!r.ok)throw new Error(j?.error?.message||`Upload failed for ${file.name}`);
-  return {url:j.secure_url,publicId:j.public_id};
-}
-
-document.querySelector('#upload').onsubmit=async e=>{
-  e.preventDefault();
-  const files=[...fileInput.files];
-  if(!files.length)return;
-  uploadBtn.disabled=true;fileInput.disabled=true;
-  try{
-    const cfg=await getUploadConfig();
-    let done=0;
-    const settled=await Promise.allSettled(files.map(async file=>{
-      const result=await uploadOne(file,cfg);
-      done+=1;status.textContent=`Uploaded ${done} of ${files.length} to Cloudinary…`;
-      return result;
-    }));
-    const assets=settled.filter(x=>x.status==='fulfilled').map(x=>x.value);
-    const failures=settled.filter(x=>x.status==='rejected');
-    if(assets.length){
-      status.textContent=`Saving ${assets.length} image${assets.length===1?'':'s'} to gallery…`;
-      const save=await fetch('/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assets})});
-      const saved=await save.json();
-      if(!save.ok)throw new Error(saved.error||'Could not save gallery.');
-      await load();
-    }
-    if(failures.length){
-      status.textContent=`${assets.length} added, ${failures.length} failed. ${failures[0].reason?.message||''}`;
-    }else{
-      status.textContent=`${assets.length} image${assets.length===1?'':'s'} added successfully.`;
-      e.target.reset();
-    }
-  }catch(err){
-    status.textContent=err.message||'Upload failed.';
-  }finally{
-    uploadBtn.disabled=false;fileInput.disabled=false;
-  }
+saveBtn.onclick=async()=>{
+  if(!dirty)return;saveBtn.disabled=true;saveState.textContent='Saving…';
+  try{const r=await fetch('/api/gallery/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({urls:items.map(x=>x.url)})});const j=await r.json();if(!r.ok)throw new Error(j.error||'Could not save sequence.');setDirty(false);status.textContent='Sequence updated successfully.';await load()}catch(err){saveState.textContent='Save failed';saveState.style.color='#ff8c8c';saveBtn.disabled=false;status.textContent=err.message}
 };
 
+fileInput.addEventListener('change',()=>{const count=fileInput.files.length;status.textContent=count?`${count} image${count===1?'':'s'} selected.`:'Select as many images as you need.'});
+
+async function getUploadConfig(){const r=await fetch('/api/upload-signature');const j=await r.json();if(!r.ok)throw new Error(j.error||'Could not prepare upload.');return j}
+
+async function uploadOne(file,cfg){const fd=new FormData();fd.append('file',file);fd.append('api_key',cfg.apiKey);fd.append('timestamp',String(cfg.timestamp));fd.append('signature',cfg.signature);fd.append('asset_folder',cfg.assetFolder);const r=await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cfg.cloudName)}/image/upload`,{method:'POST',body:fd});const j=await r.json();if(!r.ok)throw new Error(j?.error?.message||`Upload failed for ${file.name}`);return {url:j.secure_url,publicId:j.public_id}}
+
+document.querySelector('#upload').onsubmit=async e=>{e.preventDefault();const files=[...fileInput.files];if(!files.length)return;uploadBtn.disabled=true;fileInput.disabled=true;try{const cfg=await getUploadConfig();let done=0;const settled=await Promise.allSettled(files.map(async file=>{const result=await uploadOne(file,cfg);done+=1;status.textContent=`Uploaded ${done} of ${files.length} to Cloudinary…`;return result}));const assets=settled.filter(x=>x.status==='fulfilled').map(x=>x.value);const failures=settled.filter(x=>x.status==='rejected');if(assets.length){status.textContent=`Saving ${assets.length} image${assets.length===1?'':'s'} to gallery…`;const save=await fetch('/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assets})});const saved=await save.json();if(!save.ok)throw new Error(saved.error||'Could not save gallery.');await load()}if(failures.length){status.textContent=`${assets.length} added, ${failures.length} failed. ${failures[0].reason?.message||''}`}else{status.textContent=`${assets.length} image${assets.length===1?'':'s'} added successfully.`;e.target.reset()}}catch(err){status.textContent=err.message||'Upload failed.'}finally{uploadBtn.disabled=false;fileInput.disabled=false}};
+
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 load();
 </script></body></html>
